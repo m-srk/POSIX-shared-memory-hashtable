@@ -11,10 +11,15 @@
 #ifndef IPC_FAILURE
 #define IPC_FAILURE 1
 #endif
-#define MAX_BUFFERS 100
+
+#define MAX_BUFFERS (50)
+
+#define SERVER_THREAD_COUNT 1
+
+#define CLIENT_THREAD_COUNT 5
+#define CLIENT_THREAD_SLEEP_MS 10
 
 #define LOGFILE "/tmp/tumproj.log"
-
 #define SEM_MUTEX_NAME "/sem-mutex"
 #define SEM_PRODUCER_COUNT "/sem-producer-count"
 #define SEM_CONSUMER_COUNT "/sem-consumer-count"

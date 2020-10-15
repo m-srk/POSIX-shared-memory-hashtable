@@ -15,9 +15,17 @@ int main (int argc, char* argv[])
     open_and_map_shm_client();
     cout << "Semaphores inited" << endl;
     
-    pthread_t tid;
-    pthread_create(&tid, NULL, run_client_task_rand, NULL); 
-    pthread_join(tid, NULL);
-    //run_client_task_rand();
+    // lets spawn few client threads 
+    pthread_t tid[CLIENT_THREAD_COUNT];
+    for (int i=0; i<CLIENT_THREAD_COUNT; i++) {
+    	pthread_create(&tid[i], NULL, run_client_task_rand, NULL); 
+    }
+
+    // wait for all threads to complete
+    for (int j=0; j<CLIENT_THREAD_COUNT; j++) {
+    	pthread_join(tid[j], NULL);
+    }
+
+    exit(EXIT_SUCCESS);
 
 }

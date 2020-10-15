@@ -73,13 +73,13 @@ void execute_ht_query(hashtable_query_t htq)
     if ( strcmp(htq.ht_query, "INSERT") == STRINGS_EQUAL ) {
         ht->insert_item(htq.key, htq.value);
         printf("Inserted key-value : %d - %s .\n", htq.key, htq.value);
-        ht->print_table();
+        //ht->print_table();
     } else if ( strcmp(htq.ht_query, "READ") == STRINGS_EQUAL ) {
-        printf("Value against key %d is : %s\n", htq.key, ht->read_item(htq.key));
-        ht->print_table();
+        printf("Value against key %d is : %s\n", htq.key, ht->read_item(htq.key).c_str());
+        //ht->print_table();
     } else if ( strcmp(htq.ht_query, "DELETE") == STRINGS_EQUAL ) {
         ht->delete_item(htq.key);
-        ht->print_table();
+        //ht->print_table();
     } else {
         return;
     }
@@ -99,12 +99,17 @@ void* hashtable_task_runner(void* args)
         if (sem_wait (sem_data->consumer_count_sem) == IPC_FAILURE)
             print_errors ("sem_wait: spool_signal_sem");
 
-        // locking shm assuming all ps can access it all the time - confirm ?
+        // locking shm assuming all ps can access it all the time
         if (sem_wait(sem_data->mutex_sem) == IPC_FAILURE)
             print_errors("sem_wait:mutex");
 
         // Critical section start
-        char query[256];
+        if (shared_mem_ptr->consumer_index >= MAX_BUFFERS) {
+            pthread_exit(NULL);
+	    //shared_mem_ptr->consumer_index = 0;
+	}
+
+	char query[256];
         strcpy(query, shared_mem_ptr->hts[shared_mem_ptr->consumer_index].ht_query);
         printf("Query from thread %d at index %d is : %s\n", (int)gettid(),
                                                             shared_mem_ptr->consumer_index,
@@ -113,8 +118,10 @@ void* hashtable_task_runner(void* args)
         execute_ht_query(shared_mem_ptr->hts[shared_mem_ptr->consumer_index]);
         // increment consumer count
         (shared_mem_ptr->consumer_index)++;
-        if (shared_mem_ptr->consumer_index == MAX_BUFFERS)
-           shared_mem_ptr->consumer_index = 0;
+        if (shared_mem_ptr->consumer_index == MAX_BUFFERS) {
+           pthread_exit(NULL);
+	   //shared_mem_ptr->consumer_index = 0;
+	}
         // Critical section end
 
         // release shm
@@ -122,10 +129,11 @@ void* hashtable_task_runner(void* args)
 
         // give out one more buffer
         if (sem_post (ht_input->sem_data->producer_count_sem) == IPC_FAILURE)
-            print_errors ("sem_post: buffer_count_sem");
-
+	    print_errors ("sem_post: buffer_count_sem");
+	
         cout << "Released buff count sem." << endl;
         
+	sleep(1);
     }
 }
 
@@ -135,7 +143,7 @@ int main (int argc, char* argv[])
         print_usage_and_exit(argv[0]);
 
     if (!is_HT_initialized)
-        print_errors("HT nope init");
+        print_errors("Failed to init HTable");
 
     open_and_map_shm();
     init_sems();
@@ -148,18 +156,16 @@ int main (int argc, char* argv[])
     ht_input.sem_data = get_server_semaphore_data();
     ht_input.shm_data = get_server_shm_data();
 
-    int NUM_THREADS = 3; 
-    pthread_t tid[NUM_THREADS];
+    pthread_t tid[SERVER_THREAD_COUNT];
     pthread_attr_t attr;
     pthread_attr_init(&attr);
 
-    for (int i=0; i<NUM_THREADS; i++)
+    for (int i=0; i<SERVER_THREAD_COUNT; i++)
         pthread_create(&tid[i], &attr, hashtable_task_runner, &ht_input);
 
     // wait for thread to do its work
-    for (int j=0; j<NUM_THREADS; j++)
+    for (int j=0; j<SERVER_THREAD_COUNT; j++)
         pthread_join(tid[j], NULL);
 
-    return 0;
-    
+    exit(EXIT_SUCCESS); 
 }
