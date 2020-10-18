@@ -7,30 +7,52 @@
 #include <string>
 #include <semaphore.h>  // semaphore API
 
+#include "hashtable.h"
+
 // Buffer data structures
 #ifndef IPC_FAILURE
 #define IPC_FAILURE 1
 #endif
+#define STRINGS_EQUAL 0
 
-#define MAX_BUFFERS (50)
+#define MAX_BUFFERS 10000
 
-#define SERVER_THREAD_COUNT 1
+// HT query types
+#define INSERT_QUERY 0
+#define READ_QUERY 1
+#define DELETE_QUERY 2
+
+#ifndef SERVER_THREAD_COUNT_CONF 
+#define SERVER_THREAD_COUNT 2
+#else
+#define SERVER_THREAD_COUNT SERVER_THREAD_COUNT_CONF
+#endif
+ 
+#define SERVER_THREAD_SLEEP_MS 10
 
 #define CLIENT_THREAD_COUNT 5
 #define CLIENT_THREAD_SLEEP_MS 10
 
 #define LOGFILE "/tmp/tumproj.log"
+#define SERVER_THREAD_MUTEX "/sem-server-mutex"
+
 #define SEM_MUTEX_NAME "/sem-mutex"
 #define SEM_PRODUCER_COUNT "/sem-producer-count"
 #define SEM_CONSUMER_COUNT "/sem-consumer-count"
 #define SHARED_MEM_NAME "/posix-shm-tumproj"
 
 
+typedef struct thread_task_cmd
+{
+    bool is_max_buff_count_hit;   
+
+} thread_task_cmd_t;
+
 typedef struct hashtable_query {
-    char ht_query[256];
+    int ht_query;
     int key;
-    char value[256];
-    char response[256];
+    int value;
+    int response;
 } hashtable_query_t;
 
 struct shared_memory {
@@ -62,16 +84,21 @@ bool open_and_map_shm();
 bool init_sems();
 void print_err(const char* args);
 void release_shm_segment();
+void release_server_thread_lock();
+void register_HT_instance(HashTable *);
 
-server_shm_data_t* get_server_shm_data();
-server_sem_data_t* get_server_semaphore_data();
+// thread runner func
+void* hashtable_task_runner(void* args);
 
 //-------------------------------------------
 // Client API
 void set_rand_seed();
 bool init_sems_client();
 bool open_and_map_shm_client();
+void unmap_shm_mem();
+
+// thread runner func
 void* run_client_task_rand(void*);
 
 //-------------------------------------------
-#endif
+#endif //__INCLUDED_SHM_CONFIG__

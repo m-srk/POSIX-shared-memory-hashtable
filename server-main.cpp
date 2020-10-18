@@ -4,8 +4,8 @@
 #include <sys/types.h>
 #include <string.h>
 
-#include "HashTable.hpp"
-#include "utils/shm-semaphore-config.hpp"
+#include "include/HashTable.hpp"
+#include "include/shm-semaphore-config.hpp"
 
 #define IPC_FAILURE 1
 #define STRINGS_EQUAL 0
@@ -13,7 +13,7 @@
 using namespace std;
 
 // globals
-HashTable* ht;
+HashTable* ht_instance;
 bool is_HT_initialized = false;
 
 void print_usage_and_exit(char* args)
@@ -26,14 +26,14 @@ void print_usage_and_exit(char* args)
 
 bool init_hashtable(int size)
 {
-    if ( (ht = new HashTable(size)) != NULL)
+    if ( (ht_instance = new HashTable(size)) != NULL)
         return (is_HT_initialized = true);
 
     return false;
 }
 
 // todo make this a gen purpose util
-void print_errors(const char* args)
+void  print_err(const char* args)
 {
     perror(args);
     exit(EXIT_FAILURE);
@@ -54,7 +54,7 @@ int process_cmdline_args(int argc, char* argv[])
         size_str = size_str.substr(pos + 1);
         // initialize HashTable here
         if (!init_hashtable(stoi(size_str))) {
-            print_errors("Unable to init HT.");
+             print_err("Unable to init HT.");
         }
         cout << "HT init done." << endl;
         return 1;
@@ -66,106 +66,34 @@ int process_cmdline_args(int argc, char* argv[])
     }
 }
 
-void execute_ht_query(hashtable_query_t htq)
-{
-    cout << "in execute ht" << endl;
-
-    if ( strcmp(htq.ht_query, "INSERT") == STRINGS_EQUAL ) {
-        ht->insert_item(htq.key, htq.value);
-        printf("Inserted key-value : %d - %s .\n", htq.key, htq.value);
-        //ht->print_table();
-    } else if ( strcmp(htq.ht_query, "READ") == STRINGS_EQUAL ) {
-        printf("Value against key %d is : %s\n", htq.key, ht->read_item(htq.key).c_str());
-        //ht->print_table();
-    } else if ( strcmp(htq.ht_query, "DELETE") == STRINGS_EQUAL ) {
-        ht->delete_item(htq.key);
-        //ht->print_table();
-    } else {
-        return;
-    }
-
-}
-
-void* hashtable_task_runner(void* args)
-{
-    ht_worker_input_t* ht_input = (ht_worker_input_t*)args;
-    cout << "iniside ht task thread" << endl;
-
-    while (1) 
-    {   
-        auto shared_mem_ptr = ht_input->shm_data->shared_mem_ptr;
-        auto sem_data = ht_input->sem_data;
-
-        if (sem_wait (sem_data->consumer_count_sem) == IPC_FAILURE)
-            print_errors ("sem_wait: spool_signal_sem");
-
-        // locking shm assuming all ps can access it all the time
-        if (sem_wait(sem_data->mutex_sem) == IPC_FAILURE)
-            print_errors("sem_wait:mutex");
-
-        // Critical section start
-        if (shared_mem_ptr->consumer_index >= MAX_BUFFERS) {
-            pthread_exit(NULL);
-	    //shared_mem_ptr->consumer_index = 0;
-	}
-
-	char query[256];
-        strcpy(query, shared_mem_ptr->hts[shared_mem_ptr->consumer_index].ht_query);
-        printf("Query from thread %d at index %d is : %s\n", (int)gettid(),
-                                                            shared_mem_ptr->consumer_index,
-                                                            query);
-        // execute ht query
-        execute_ht_query(shared_mem_ptr->hts[shared_mem_ptr->consumer_index]);
-        // increment consumer count
-        (shared_mem_ptr->consumer_index)++;
-        if (shared_mem_ptr->consumer_index == MAX_BUFFERS) {
-           pthread_exit(NULL);
-	   //shared_mem_ptr->consumer_index = 0;
-	}
-        // Critical section end
-
-        // release shm
-        release_shm_segment();
-
-        // give out one more buffer
-        if (sem_post (ht_input->sem_data->producer_count_sem) == IPC_FAILURE)
-	    print_errors ("sem_post: buffer_count_sem");
-	
-        cout << "Released buff count sem." << endl;
-        
-	sleep(1);
-    }
-}
-
 int main (int argc, char* argv[])
 {   
     if (process_cmdline_args(argc, argv) < 1)
         print_usage_and_exit(argv[0]);
 
     if (!is_HT_initialized)
-        print_errors("Failed to init HTable");
+         print_err("Failed to init HTable");
 
+    register_HT_instance(ht_instance);
     open_and_map_shm();
     init_sems();
 
-    cout << "Semaphores inited" << endl;
+    cout << "[SERVER] Semaphores inited" << endl;
 
     release_shm_segment();
 
-    ht_worker_input_t ht_input = *(ht_worker_input_t* )malloc(sizeof(ht_worker_input_t)); 
-    ht_input.sem_data = get_server_semaphore_data();
-    ht_input.shm_data = get_server_shm_data();
+    release_server_thread_lock();
 
     pthread_t tid[SERVER_THREAD_COUNT];
     pthread_attr_t attr;
     pthread_attr_init(&attr);
 
     for (int i=0; i<SERVER_THREAD_COUNT; i++)
-        pthread_create(&tid[i], &attr, hashtable_task_runner, &ht_input);
+        pthread_create(&tid[i], &attr, hashtable_task_runner, NULL);
 
     // wait for thread to do its work
     for (int j=0; j<SERVER_THREAD_COUNT; j++)
         pthread_join(tid[j], NULL);
 
-    exit(EXIT_SUCCESS); 
+    return 0; 
 }

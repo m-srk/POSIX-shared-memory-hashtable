@@ -13,13 +13,13 @@ server-main.o: server-main.cpp
 	$(CC) $(CFLAGS) server-main.cpp -o server-main.o
 
 server-utils.o:
-	$(CC) $(CFLAGS) $(LFLAGS) $(UTILS)/server-utils.cpp -o $(SERVER_UTILS)
+	$(CC) $(CFLAGS) $(LFLAGS) server-utils.cpp -o $(SERVER_UTILS)
 
 client-main.o: client-main.cpp
 	$(CC) $(CFLAGS) client-main.cpp -o client-main.o
 
 client-utils.o:
-	$(CC) $(CFLAGS) $(LFLAGS) $(UTILS)/client-utils.cpp -o client-utils.o
+	$(CC) $(CFLAGS) $(LFLAGS) client-utils.cpp -o client-utils.o
 
 clean:
 	rm -rf *o $(SERVER_BIN) $(CLIENT_BIN)

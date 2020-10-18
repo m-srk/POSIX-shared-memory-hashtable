@@ -2,8 +2,7 @@
 #include <string>
 #include <pthread.h>
 
-#include "HashTable.hpp"
-#include "utils/shm-semaphore-config.hpp"
+#include "include/shm-semaphore-config.h"
 
 using namespace std;
 
@@ -11,12 +10,16 @@ using namespace std;
 int main (int argc, char* argv[])
 {   
     set_rand_seed();
+
     init_sems_client();
+    
     open_and_map_shm_client();
-    cout << "Semaphores inited" << endl;
+
+    cout << "[CLIENT] Semaphores inited, shm mapped." << endl;
     
     // lets spawn few client threads 
     pthread_t tid[CLIENT_THREAD_COUNT];
+    
     for (int i=0; i<CLIENT_THREAD_COUNT; i++) {
     	pthread_create(&tid[i], NULL, run_client_task_rand, NULL); 
     }
@@ -26,6 +29,8 @@ int main (int argc, char* argv[])
     	pthread_join(tid[j], NULL);
     }
 
-    exit(EXIT_SUCCESS);
+    unmap_shm_mem();
+
+    return 0;
 
 }

@@ -1,6 +1,7 @@
 #include <iostream>
 #include <string.h>
-#include "shm-semaphore-config.hpp"
+
+#include "include/shm-semaphore-config.hpp"
 
 using namespace std;
 
@@ -64,7 +65,7 @@ void generate_rand_query(hashtable_query_t* htq)
 	int NUM_QUERY_TYPES = 3;
 	char query_types[NUM_QUERY_TYPES][256] = {"INSERT", "READ", "DELETE"};
 	int qtype_index = rand() % NUM_QUERY_TYPES;
-	int key = rand() % 1000;
+	int key = rand() % 50;
 	char value[256];
 	
 	// write query into the given mem
@@ -76,8 +77,16 @@ void generate_rand_query(hashtable_query_t* htq)
 	return;
 }
 
+void unmap_shm_mem()
+{
+    if (munmap (shared_mem_ptr, sizeof (struct shared_memory)) == IPC_FAILURE)
+        print_err ("munmap");    
+}
+
 void* run_client_task_rand(void* args)
 {
+    bool is_max_buff_count_hit = false;    
+
     while (1) {
 
         cout << "Adding new query..." << endl;
@@ -91,32 +100,38 @@ void* run_client_task_rand(void* args)
             print_err ("sem_wait: mutex_sem");
         cout << "Got the mutex sem." << endl;
 	
- 	// if the buffers are full, nothing to do 	
-	if (shared_mem_ptr->producer_index >= MAX_BUFFERS) {
-		printf("Max buffers hit, client thread %d exiting\n", (int)gettid());
-		pthread_exit(NULL);	
-	}	
+     	// if the buffers are full, nothing to do 	
+    	if (shared_mem_ptr->producer_index >= MAX_BUFFERS) {
+            is_max_buff_count_hit = true;
+    		printf("Max buffers hit at check [1], client thread %d exiting\n", (int)gettid());
+    	} else {
+            printf("producer count = %d, from thread %d.\n", shared_mem_ptr->producer_index, (int)gettid());
+        }	
 
-	// Critical section start
         hashtable_query_t* htq = (hashtable_query_t* ) malloc(sizeof(hashtable_query_t));
-        generate_rand_query(htq);
-              
-        memcpy(
-            & shared_mem_ptr->hts[shared_mem_ptr->producer_index], 
-            htq, 
-            sizeof(hashtable_query_t)
-        );
 
-        (shared_mem_ptr->producer_index)++;
-        if (shared_mem_ptr->producer_index == MAX_BUFFERS) {
-		printf("Max buffers hit, client thread %d exiting\n", (int)gettid());
-		pthread_exit(NULL);	
-		//shared_mem_ptr->producer_index = 0;
-	}		
-                
-        // Critical section end
-	
-	// release mutex
+        if (!is_max_buff_count_hit) {
+            
+            // Critical section start
+            generate_rand_query(htq);
+                  
+            memcpy(
+                & shared_mem_ptr->hts[shared_mem_ptr->producer_index], 
+                htq, 
+                sizeof(hashtable_query_t)
+            );
+
+            (shared_mem_ptr->producer_index)++;
+            
+            if (shared_mem_ptr->producer_index == MAX_BUFFERS) {
+                is_max_buff_count_hit = true;
+                printf("Max buffers hit at check [2] thread preparing to exit...\n");
+                //shared_mem_ptr->producer_index = 0;
+            }		
+            // Critical section end
+        }
+
+        // release mutex
         if (sem_post (mutex_sem) == IPC_FAILURE)
             print_err ("sem_post: mutex_sem");
 
@@ -126,16 +141,21 @@ void* run_client_task_rand(void* args)
         // give out consumer sem
         if (sem_post(consumer_count_sem) == IPC_FAILURE)
             print_err("sem_post: consumer_count");
-            
-	// sleep for given ms - CLIENT_THREAD_SLEEP_MS
+        
+        printf("[CLIENT-%d] Posted consumer count sem...\n", (int)gettid());
+
+        if (is_max_buff_count_hit) {
+            printf("client thread %d exiting\n", (int)gettid());
+            pthread_exit(NULL);
+        }
+
+        // sleep for given ms - CLIENT_THREAD_SLEEP_MS
         struct timespec ts;
-	ts.tv_sec = CLIENT_THREAD_SLEEP_MS / 1000;
-	ts.tv_nsec = (CLIENT_THREAD_SLEEP_MS % 1000) * 1000000;
-	nanosleep(&ts, &ts);
+        ts.tv_sec = CLIENT_THREAD_SLEEP_MS / 1000;
+        ts.tv_nsec = (CLIENT_THREAD_SLEEP_MS % 1000) * 1000000;
+        nanosleep(&ts, &ts);
+    
     }
-   
-    if (munmap (shared_mem_ptr, sizeof (struct shared_memory)) == IPC_FAILURE)
-        print_err ("munmap");
 
 }
 
