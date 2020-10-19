@@ -1,10 +1,8 @@
-#include <iostream>
-#include <string>
+#include <stdio.h>
+#include <string.h>
 #include <pthread.h>
 
 #include "include/shm-semaphore-config.h"
-
-using namespace std;
 
 
 int main (int argc, char* argv[])
@@ -15,9 +13,9 @@ int main (int argc, char* argv[])
     
     open_and_map_shm_client();
 
-    cout << "[CLIENT] Semaphores inited, shm mapped." << endl;
+    printf("[CLIENT] Semaphores inited, shm mapped.\n");
     
-    // lets spawn few client threads 
+    // spawn few client threads 
     pthread_t tid[CLIENT_THREAD_COUNT];
     
     for (int i=0; i<CLIENT_THREAD_COUNT; i++) {

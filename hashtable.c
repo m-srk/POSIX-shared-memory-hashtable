@@ -1,5 +1,5 @@
 /*
-* A thread safe hash table impl. using modulus on key (int type) as the hash function.
+* Thread safe hash table impl. using modulus on key (int type) as the hash function.
 * Bucket size is fixed and mutexs are attached to partitions of buckets.
 * HashTable accepts K, V with types int, int
 */

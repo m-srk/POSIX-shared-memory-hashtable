@@ -1,22 +1,26 @@
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
+#include <pthread.h>
+#include <signal.h>
 
 #include "include/shm-semaphore-config.h"
 
-using namespace std;
 
-// globals
-thread_task_cmd_t tt_cmd = (thread_task_cmd_t){ false };
+// globals start here
 
 HashTable *ht;
 server_shm_data_t s_shm_data;
-server_sem_data_t s_sem_data;
-// shm related
+pthread_t* tid_ptr;
+
+// shm
 int fd_shm;
 struct shared_memory* shared_mem_ptr;
 bool _server_shm_init = false;
-// semaphore related
+
+// semaphores
 sem_t *mutex_sem, *producer_count_sem, *consumer_count_sem, *server_thread_mutex;
+sem_t *ht_prod_sem, *ht_cons_sem;
 bool _server_semphore_init = false;
 
 
@@ -30,6 +34,12 @@ HashTable* get_HT_instance()
     return ht;
 }
 
+void lock_shm_segment()
+{   
+    if (sem_wait(mutex_sem) == SEMAPHORE_FAILURE)
+             print_err("sem_wait:mutex");
+}
+
 void release_shm_segment()
 {
     // indicate shared memory segment is available
@@ -37,18 +47,16 @@ void release_shm_segment()
         print_err("sem_post: mutex_sem");
 }
 
-void release_server_thread_lock()
-{
-    if (sem_post (server_thread_mutex) == IPC_FAILURE)
-        print_err("sem_post: server_thread_mutex");
-}
-
 bool init_sems()
 {
     sem_unlink(SEM_MUTEX_NAME);
+    sem_unlink(SERVER_THREAD_MUTEX);
+
     sem_unlink(SEM_PRODUCER_COUNT);
     sem_unlink(SEM_CONSUMER_COUNT);
-    sem_unlink(SERVER_THREAD_MUTEX);
+
+    sem_unlink(SEM_HT_QUERY_PROD);
+    sem_unlink(SEM_HT_QUERY_CONS);
     
     //  mutual exclusion semaphore, mutex_sem with an initial value 0.
     if ((mutex_sem = sem_open (SEM_MUTEX_NAME, O_CREAT, 0660, 0)) == SEM_FAILED)
@@ -65,7 +73,13 @@ bool init_sems()
     // counting semaphore, indicating the number of queries to be processed. Initial value = 0
     if ((consumer_count_sem = sem_open (SEM_CONSUMER_COUNT, O_CREAT, 0660, 0)) == SEM_FAILED)
         print_err ("sem_open");
-    
+
+    if ((ht_prod_sem = sem_open(SEM_HT_QUERY_PROD, O_CREAT, 0660, MAX_BUFFERS)) == SEM_FAILED)
+        print_err("sem_open: ht_prod_sem");
+
+    if ((ht_cons_sem = sem_open(SEM_HT_QUERY_CONS, O_CREAT, 0660, 0)) == SEM_FAILED)
+        print_err("sem_open: ht_prod_sem");
+
     return true;
 }   
 
@@ -104,6 +118,11 @@ void register_HT_instance(HashTable *ht_instance)
     ht = ht_instance;
 }
 
+void register_threadid_ptr(pthread_t* tptr)
+{
+    tid_ptr = tptr;
+}
+
 int execute_ht_query(hashtable_query_t htq)
 {
     printf("in execute ht\n");
@@ -113,7 +132,7 @@ int execute_ht_query(hashtable_query_t htq)
     {
     case INSERT_QUERY:
         hash_insert(ht, htq.key, htq.value);
-        printf("Inserted key-value : %d - %s .\n", htq.key, htq.value);
+        printf("Inserted key-value : %d - %d.\n", htq.key, htq.value);
         break;
     case READ_QUERY:
         hash_get(ht, htq.key, &htq.value);
@@ -130,64 +149,61 @@ int execute_ht_query(hashtable_query_t htq)
     return 0;
 }
 
-void* hashtable_task_runner(void* args)
+void* consumer_task_runner(void* args)
 {
-    bool is_max_buff_count_hit = false;
+    int hit_max_buffers = 0;
+    bool ami_last_consumer = false;
     int num_times_consumer_sem_acquired = 0;
-    printf("iniside ht task thread\n");
-    
+	
     while (1) 
     {   
-        printf("[SERVER-%d] Waiting for server thread lock...\n", (int)gettid());
+       printf("[SERVER-%d] Waiting for consumer_count_sem...\n", (int)gettid());
 
-        if (sem_wait(server_thread_mutex) == IPC_FAILURE)
-             print_err ("sem_wait: server_thread_mutex");
-
-        if (tt_cmd.is_max_buff_count_hit) {
-            release_server_thread_lock();
-            printf("[SERVER-%d] Max buffers hit at check [3], thread exiting.\n", (int)gettid());
-            pthread_exit(NULL);
-        }        
-
-        printf("[SERVER-%d] Waiting for consumer_count_sem...\n", (int)gettid());
-
-        if (sem_wait (consumer_count_sem) == IPC_FAILURE)
+        if (sem_wait (consumer_count_sem) == SEMAPHORE_FAILURE)
              print_err ("sem_wait: consumer_count_sem");
        
-        num_times_consumer_sem_acquired++;
-        printf("[SERVER-%d] Num times consumer sem acquired - %d.\n", (int)gettid(), num_times_consumer_sem_acquired);
-        printf("[SERVER-%d] Waiting for mutex.\n", (int)gettid());
+        // DBG only
+        // num_times_consumer_sem_acquired++;
+        // printf("[SERVER-%d] Num times consumer sem acquired - %d.\n", (int)gettid(), num_times_consumer_sem_acquired);
+        // printf("[SERVER-%d] Waiting for mutex.\n", (int)gettid());
 
-        // locking shm assuming all ps can access it all the time
-        if (sem_wait(mutex_sem) == IPC_FAILURE)
-             print_err("sem_wait:mutex");
+        // locking shm
+        lock_shm_segment();
 
         // Critical section start
         if (shared_mem_ptr->consumer_index >= MAX_BUFFERS) {
-            is_max_buff_count_hit = true;
             printf("[SERVER-%d] Max buffers hit at check [1], thread exiting.\n", (int)gettid());
-           //shared_mem_ptr->consumer_index = 0;
+            hit_max_buffers = 1;
+            release_shm_segment();
+            pthread_exit(NULL);
         }
-
-        /* repair needed due to change in value type
-        char query[256];
-        strcpy(query, shared_mem_ptr->hts[shared_mem_ptr->consumer_index].ht_query);
-        printf("[SERVER-%d] Query at index %d is : %s\n", (int)gettid(),
-                                                            shared_mem_ptr->consumer_index,
-                                                            query);
-        */
-
-        // TODO push current query to execution queue 
         
-        // execute ht query
-        execute_ht_query(shared_mem_ptr->hts[shared_mem_ptr->consumer_index]);
+        int cons_index = shared_mem_ptr->consumer_index;
+
+        // TODO dbg only, rm in prod
+        // char query[256];
+        // int qindex = shared_mem_ptr->hts[cons_index].ht_query;
+        // if (qindex == 0)
+        //     sprintf(query, "INSERT");
+        // else if (qindex == 1)
+        //     sprintf(query, "READ");
+        // else if (qindex == 2)
+        //     sprintf(query, "DELETE");
+        // else {
+        //     print_err("Unknown query type\n");
+        //     exit(EXIT_FAILURE);
+        // }
+        // printf("[SERVER-%d] Query at index %d is : %s\n", (int)gettid(), cons_index, query); 
         
+        // query execution as HT is a concurrent DS
+        execute_ht_query(shared_mem_ptr->hts[cons_index]);
+
         // increment consumer count
         (shared_mem_ptr->consumer_index)++;
         if (shared_mem_ptr->consumer_index == MAX_BUFFERS) {
-           is_max_buff_count_hit = true;
-           tt_cmd.is_max_buff_count_hit = true;
-           printf("[SERVER-%d] Max buffers hit at check [2], thread exiting.\n", (int)gettid());
+            hit_max_buffers = 1;
+            ami_last_consumer = true;
+            printf("[SERVER-%d] Max buffers hit at check [2], thread exiting.\n", (int)gettid());
             //shared_mem_ptr->consumer_index = 0;
         }
         // Critical section end
@@ -195,15 +211,13 @@ void* hashtable_task_runner(void* args)
         // release shm
         release_shm_segment();
 
-        // give out one more buffer - not required in the case of fixed no of reqs from client (=MAX_BUFFERS)
-        // if (sem_post (ht_input-> producer_count_sem) == IPC_FAILURE)
-        //       print_err ("sem_post: buffer_count_sem");
-        // printf("[SERVER-%d] Released buff count sem.\n", (int)gettid());
-
-        release_server_thread_lock();
-
-        if (is_max_buff_count_hit) {
-            printf("[SERVER-%d] server thread exiting...\n", (int)gettid());
+        if ( hit_max_buffers > 0 ) {
+            if (ami_last_consumer) {
+            // post for other threads
+            printf("posting sems now...\n");
+            for (int i=0; i<SERVER_THREAD_COUNT-1; i++)
+                sem_post(consumer_count_sem);
+            }
             pthread_exit(NULL);
         }
 
@@ -212,5 +226,6 @@ void* hashtable_task_runner(void* args)
         ts.tv_sec = SERVER_THREAD_SLEEP_MS / 1000;
         ts.tv_nsec = (SERVER_THREAD_SLEEP_MS % 1000) * 1000000;
         nanosleep(&ts, &ts);
+
     }
 }

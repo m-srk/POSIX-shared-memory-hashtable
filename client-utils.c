@@ -1,10 +1,8 @@
-#include <iostream>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
-#include "include/shm-semaphore-config.hpp"
-
-using namespace std;
-
+#include "include/shm-semaphore-config.h"
 
 // globals
 bool is_rand_seeded = false;
@@ -29,7 +27,7 @@ bool init_sems_client()
     if ((consumer_count_sem = sem_open (SEM_CONSUMER_COUNT, 0, 0, 0)) == SEM_FAILED)
         print_err ("sem_open");
     
-    cout << "[CLIENT] All sems init done." << endl;
+    printf("[CLIENT] All sems init done.\n");
     
     return true;
 }   
@@ -62,17 +60,13 @@ void set_rand_seed()
 
 void generate_rand_query(hashtable_query_t* htq)
 {	
-	int NUM_QUERY_TYPES = 3;
-	char query_types[NUM_QUERY_TYPES][256] = {"INSERT", "READ", "DELETE"};
 	int qtype_index = rand() % NUM_QUERY_TYPES;
 	int key = rand() % 50;
-	char value[256];
-	
+	int value = rand() % 1000;
 	// write query into the given mem
 	htq->key = key;
-	strcpy(htq->ht_query, query_types[qtype_index]);
-       	sprintf(value, "valuestr_%d", key);
-	strcpy(htq->value, value);
+	htq->ht_query = qtype_index;
+    htq->value = value;
 
 	return;
 }
@@ -89,63 +83,66 @@ void* run_client_task_rand(void* args)
 
     while (1) {
 
-        cout << "Adding new query..." << endl;
+        printf("Adding new query...\n");
 
-        if (sem_wait (producer_count_sem) == -1)
+        if (sem_wait (producer_count_sem) == SEMAPHORE_FAILURE)
             print_err ("sem_wait: buffer_count_sem");
-        cout << "WAITING FOR mutex sem." << endl;
+        printf("WAITING FOR mutex sem.\n");
 
         // get shm mutex 
-        if (sem_wait (mutex_sem) == -1)
+        if (sem_wait (mutex_sem) == SEMAPHORE_FAILURE)
             print_err ("sem_wait: mutex_sem");
-        cout << "Got the mutex sem." << endl;
+        printf("Got the mutex sem.\n");
 	
      	// if the buffers are full, nothing to do 	
     	if (shared_mem_ptr->producer_index >= MAX_BUFFERS) {
             is_max_buff_count_hit = true;
-    		printf("Max buffers hit at check [1], client thread %d exiting\n", (int)gettid());
-    	} else {
-            printf("producer count = %d, from thread %d.\n", shared_mem_ptr->producer_index, (int)gettid());
-        }	
+            
+            // release mutex
+            if (sem_post (mutex_sem) == SEMAPHORE_FAILURE)
+                print_err ("sem_post: mutex_sem");
+    		
+            printf("Max buffers hit at check [1], client thread %d exiting\n", (int)gettid());
+            pthread_exit(NULL);
+    	}	
 
         hashtable_query_t* htq = (hashtable_query_t* ) malloc(sizeof(hashtable_query_t));
-
-        if (!is_max_buff_count_hit) {
             
-            // Critical section start
-            generate_rand_query(htq);
-                  
-            memcpy(
-                & shared_mem_ptr->hts[shared_mem_ptr->producer_index], 
-                htq, 
-                sizeof(hashtable_query_t)
-            );
+        // Critical section start
+        generate_rand_query(htq);
+                
+        memcpy(
+            & shared_mem_ptr->hts[shared_mem_ptr->producer_index], 
+            htq, 
+            sizeof(hashtable_query_t)
+        );
 
-            (shared_mem_ptr->producer_index)++;
-            
-            if (shared_mem_ptr->producer_index == MAX_BUFFERS) {
-                is_max_buff_count_hit = true;
-                printf("Max buffers hit at check [2] thread preparing to exit...\n");
-                //shared_mem_ptr->producer_index = 0;
-            }		
-            // Critical section end
-        }
+        (shared_mem_ptr->producer_index)++;
+        
+        if (shared_mem_ptr->producer_index == MAX_BUFFERS) {
+            is_max_buff_count_hit = true;
+            printf("Max buffers hit at check [2] thread preparing to exit...\n");
+            //shared_mem_ptr->producer_index = 0;
+        }		
+        // Critical section end
 
         // release mutex
-        if (sem_post (mutex_sem) == IPC_FAILURE)
+        if (sem_post (mutex_sem) == SEMAPHORE_FAILURE)
             print_err ("sem_post: mutex_sem");
 
         // free mem
         free(htq);
 
         // give out consumer sem
-        if (sem_post(consumer_count_sem) == IPC_FAILURE)
+        if (sem_post(consumer_count_sem) == SEMAPHORE_FAILURE)
             print_err("sem_post: consumer_count");
         
         printf("[CLIENT-%d] Posted consumer count sem...\n", (int)gettid());
 
         if (is_max_buff_count_hit) {
-            printf("client thread %d exiting\n", (int)gettid());
+            for (int i=0; i<CLIENT_THREAD_COUNT-1; i++)
+                sem_post(producer_count_sem);
+            printf("Sems posted, client thread %d exiting now...\n", (int)gettid());
             pthread_exit(NULL);
         }
 

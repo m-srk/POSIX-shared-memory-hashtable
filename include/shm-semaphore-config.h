@@ -1,10 +1,10 @@
 #ifndef __INCLUDED_SHM_CONFIG__
 #define __INCLUDED_SHM_CONFIG__
 
+#include <stdlib.h>
 #include <fcntl.h>      // O_ constants
 #include <sys/mman.h>   // shared memory API
 #include <unistd.h>     // POSIX API
-#include <string>
 #include <semaphore.h>  // semaphore API
 
 #include "hashtable.h"
@@ -13,17 +13,25 @@
 #ifndef IPC_FAILURE
 #define IPC_FAILURE 1
 #endif
+
+#ifndef SEMAPHORE_FAILURE
+#define SEMAPHORE_FAILURE -1
+#endif
+
 #define STRINGS_EQUAL 0
 
 #define MAX_BUFFERS 10000
 
 // HT query types
+#define NUM_QUERY_TYPES 3
+
 #define INSERT_QUERY 0
 #define READ_QUERY 1
 #define DELETE_QUERY 2
 
+// thread defines
 #ifndef SERVER_THREAD_COUNT_CONF 
-#define SERVER_THREAD_COUNT 2
+#define SERVER_THREAD_COUNT 6
 #else
 #define SERVER_THREAD_COUNT SERVER_THREAD_COUNT_CONF
 #endif
@@ -33,12 +41,15 @@
 #define CLIENT_THREAD_COUNT 5
 #define CLIENT_THREAD_SLEEP_MS 10
 
+// sem names
 #define LOGFILE "/tmp/tumproj.log"
 #define SERVER_THREAD_MUTEX "/sem-server-mutex"
 
 #define SEM_MUTEX_NAME "/sem-mutex"
 #define SEM_PRODUCER_COUNT "/sem-producer-count"
 #define SEM_CONSUMER_COUNT "/sem-consumer-count"
+#define SEM_HT_QUERY_PROD "/sem-ht-producer"
+#define SEM_HT_QUERY_CONS "/sem-ht-consumer"
 #define SHARED_MEM_NAME "/posix-shm-tumproj"
 
 
@@ -55,8 +66,14 @@ typedef struct hashtable_query {
     int response;
 } hashtable_query_t;
 
+typedef struct query_buffer {
+    hashtable_query_t hts[MAX_BUFFERS];
+    int ht_prod_count;
+    int ht_cons_count;
+} query_buffer;
+
 struct shared_memory {
-    hashtable_query_t hts [MAX_BUFFERS];
+    hashtable_query_t hts[MAX_BUFFERS];
     int producer_index;
     int consumer_index;
 };
@@ -84,11 +101,13 @@ bool open_and_map_shm();
 bool init_sems();
 void print_err(const char* args);
 void release_shm_segment();
-void release_server_thread_lock();
+
+void register_threadid_ptr(pthread_t* tptr);
 void register_HT_instance(HashTable *);
 
 // thread runner func
-void* hashtable_task_runner(void* args);
+void* consumer_task_runner(void* args);
+void* htquery_task_runner(void* args);
 
 //-------------------------------------------
 // Client API
@@ -101,4 +120,6 @@ void unmap_shm_mem();
 void* run_client_task_rand(void*);
 
 //-------------------------------------------
+
+
 #endif //__INCLUDED_SHM_CONFIG__
