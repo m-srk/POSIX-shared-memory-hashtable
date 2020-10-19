@@ -1,13 +1,14 @@
 #!/bin/bash
 
-make clean
 rm server.log client.log
 
-make SERVER_THREAD_COUNT_CONF=$2
+# make includes clean
+make 
 
-{ time ./runserver --size=$1 >> server.log & } 2>> time-server.log
+# $1 - size, $2 - num mutexs/partitions
+{ time ./runserver $1 $2 > server.log & } 2>> time-server.log
 
 pidof runclient >/dev/null && killall runclient 
-./runclient >> client.log
+./runclient > client.log
 
 exit

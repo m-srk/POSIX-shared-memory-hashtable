@@ -31,15 +31,15 @@
 
 // thread defines
 #ifndef SERVER_THREAD_COUNT_CONF 
-#define SERVER_THREAD_COUNT 6
+#define SERVER_THREAD_COUNT 50
 #else
 #define SERVER_THREAD_COUNT SERVER_THREAD_COUNT_CONF
 #endif
  
-#define SERVER_THREAD_SLEEP_MS 10
+#define SERVER_THREAD_SLEEP_MS 5
 
 #define CLIENT_THREAD_COUNT 5
-#define CLIENT_THREAD_SLEEP_MS 10
+#define CLIENT_THREAD_SLEEP_MS 5
 
 // sem names
 #define LOGFILE "/tmp/tumproj.log"

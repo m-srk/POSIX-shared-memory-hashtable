@@ -61,8 +61,8 @@ void set_rand_seed()
 void generate_rand_query(hashtable_query_t* htq)
 {	
 	int qtype_index = rand() % NUM_QUERY_TYPES;
-	int key = rand() % 50;
-	int value = rand() % 1000;
+	int key = rand() % 1000;
+	int value = rand() % 10000;
 	// write query into the given mem
 	htq->key = key;
 	htq->ht_query = qtype_index;
@@ -83,16 +83,16 @@ void* run_client_task_rand(void* args)
 
     while (1) {
 
-        printf("Adding new query...\n");
+        // printf("Adding new query...\n");
 
         if (sem_wait (producer_count_sem) == SEMAPHORE_FAILURE)
             print_err ("sem_wait: buffer_count_sem");
-        printf("WAITING FOR mutex sem.\n");
+        // printf("WAITING FOR mutex sem.\n");
 
         // get shm mutex 
         if (sem_wait (mutex_sem) == SEMAPHORE_FAILURE)
             print_err ("sem_wait: mutex_sem");
-        printf("Got the mutex sem.\n");
+        // printf("Got the mutex sem.\n");
 	
      	// if the buffers are full, nothing to do 	
     	if (shared_mem_ptr->producer_index >= MAX_BUFFERS) {
@@ -137,7 +137,7 @@ void* run_client_task_rand(void* args)
         if (sem_post(consumer_count_sem) == SEMAPHORE_FAILURE)
             print_err("sem_post: consumer_count");
         
-        printf("[CLIENT-%d] Posted consumer count sem...\n", (int)gettid());
+        // printf("[CLIENT-%d] Posted consumer count sem...\n", (int)gettid());
 
         if (is_max_buff_count_hit) {
             for (int i=0; i<CLIENT_THREAD_COUNT-1; i++)

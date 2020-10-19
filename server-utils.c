@@ -125,7 +125,7 @@ void register_threadid_ptr(pthread_t* tptr)
 
 int execute_ht_query(hashtable_query_t htq)
 {
-    printf("in execute ht\n");
+    // printf("in execute ht\n");
     HashTable* ht = get_HT_instance();
 
     switch (htq.ht_query)
@@ -157,7 +157,7 @@ void* consumer_task_runner(void* args)
 	
     while (1) 
     {   
-       printf("[SERVER-%d] Waiting for consumer_count_sem...\n", (int)gettid());
+        //printf("[SERVER-%d] Waiting for consumer_count_sem...\n", (int)gettid());
 
         if (sem_wait (consumer_count_sem) == SEMAPHORE_FAILURE)
              print_err ("sem_wait: consumer_count_sem");
@@ -193,7 +193,7 @@ void* consumer_task_runner(void* args)
         //     print_err("Unknown query type\n");
         //     exit(EXIT_FAILURE);
         // }
-        // printf("[SERVER-%d] Query at index %d is : %s\n", (int)gettid(), cons_index, query); 
+        printf("[SERVER-%d] query at index %d.\n", (int)gettid(), cons_index); 
         
         // query execution as HT is a concurrent DS
         execute_ht_query(shared_mem_ptr->hts[cons_index]);
