@@ -1,5 +1,5 @@
-# TUM-shm-project
-Server-client processes comm. through POSIX shm, client sends hashtable queries which the mult-threaded server works on. 
+# POSIX Shared Memory Demo Projexr
+Server and client processes communicate through POSIX shm API, client sends hashtable queries which the mult-threaded server works on. 
 
 # How to Build and Run ->
 1. Clone the repo, checkout main branch
