@@ -22,7 +22,6 @@ bool init_sems();
 void print_err(const char* args);
 void release_shm_segment();
 
-//TODO rm void register_threadid_ptr(pthread_t* tptr);
 void register_HT_instance(HashTable *);
 
 // thread runner func

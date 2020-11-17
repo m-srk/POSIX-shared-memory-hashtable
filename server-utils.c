@@ -10,7 +10,6 @@
 
 // globals start here
 HashTable *ht;
-//TODO rm server_shm_data_t s_shm_data;
 pthread_t* tid_ptr;
 
 // shm
