@@ -29,4 +29,4 @@ void register_HT_instance(HashTable *);
 void* consumer_task_runner(void* args);
 void* htquery_task_runner(void* args);
 
-#endif __SERVER_UTILS_H__
+#endif //__SERVER_UTILS_H__

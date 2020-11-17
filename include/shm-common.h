@@ -5,6 +5,7 @@
 #include <fcntl.h>      // O_ constants
 #include <sys/mman.h>   // shared memory API
 #include <unistd.h>     // POSIX API
+#include <pthread.h>
 #include <semaphore.h>  // semaphore API
 
 #include "hashtable.h" //HT

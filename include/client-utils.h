@@ -18,4 +18,4 @@ void* run_client_task_rand(void* args);
 
 void unmap_shm_mem();
 
-#endif __CLIENT_UTILS_H__
+#endif //__CLIENT_UTILS_H__

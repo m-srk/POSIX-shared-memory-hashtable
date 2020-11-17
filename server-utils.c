@@ -161,7 +161,7 @@ void* consumer_task_runner(void* args)
 
         // Critical section start
         if (shared_mem_ptr->consumer_index >= MAX_BUFFERS) {
-            printf("[SERVER-%d] Max buffers hit at check [1], thread exiting.\n", (int)gettid());
+            //printf("[SERVER-%d] Max buffers hit at check [1], thread exiting.\n", (int)gettid());
             hit_max_buffers = 1;
             release_shm_segment();
             pthread_exit(NULL);
@@ -179,7 +179,7 @@ void* consumer_task_runner(void* args)
         if (shared_mem_ptr->consumer_index == MAX_BUFFERS) {
             hit_max_buffers = 1;
             ami_last_consumer = true;
-            printf("[SERVER-%d] Max buffers hit at check [2], thread exiting.\n", (int)gettid());
+            //printf("[SERVER-%d] Max buffers hit at check [2], thread exiting.\n", (int)gettid());
             //shared_mem_ptr->consumer_index = 0;
         }
         // Critical section end
