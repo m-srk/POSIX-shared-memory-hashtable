@@ -1,9 +1,9 @@
 all: clean server client
 
-server: hashtable server-main.o server-utils.o
+server: hashtable server-utils.o server-main.o
 	$(CC) $(SERVER_UTILS) $(HASHTABLE_OUT) server-main.o $(LFLAGS) -o $(SERVER_BIN)
 
-client: client-main.o client-utils.o
+client: client-utils.o client-main.o
 	$(CC) client-utils.o client-main.o $(LFLAGS) -o $(CLIENT_BIN)
 
 hashtable: hashtable.c

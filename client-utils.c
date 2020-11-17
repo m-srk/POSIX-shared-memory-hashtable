@@ -2,7 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "include/shm-semaphore-config.h"
+#include "include/client-utils.h"
+#include "include/shm-common.h"
 
 // globals
 bool is_rand_seeded = false;
@@ -15,9 +16,19 @@ void print_err(const char* args)
     exit(EXIT_FAILURE);
 }
 
+void set_rand_seed()
+{
+    
+    if (!is_rand_seeded) {
+        srand(time(0)); // seed for rand func
+        is_rand_seeded = true;
+    }
+
+}
+
 bool init_sems_client()
 {
-    //  mutual exclusion semaphore, mutex_sem
+    //  mutex_sem is the global lock on shared mem.
     if ((mutex_sem = sem_open (SEM_MUTEX_NAME, 0, O_RDWR | O_CREAT)) == SEM_FAILED)
         print_err ("sem_open");
 
@@ -48,15 +59,7 @@ bool open_and_map_shm_client()
     return true;
 }
 
-void set_rand_seed()
-{
-	
-    if (!is_rand_seeded) {
-        srand(time(0)); // seed for rand func
-    	is_rand_seeded = true;
-    }
 
-}
 
 void generate_rand_query(hashtable_query_t* htq)
 {	
@@ -92,7 +95,6 @@ void* run_client_task_rand(void* args)
         // get shm mutex 
         if (sem_wait (mutex_sem) == SEMAPHORE_FAILURE)
             print_err ("sem_wait: mutex_sem");
-        // printf("Got the mutex sem.\n");
 	
      	// if the buffers are full, nothing to do 	
     	if (shared_mem_ptr->producer_index >= MAX_BUFFERS) {

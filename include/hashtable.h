@@ -1,8 +1,5 @@
-#ifndef __HASHTABLE_H_INCLUDED__
-#define __HASHTABLE_H_INCLUDED__
-
-#include <pthread.h>
-#include <stdbool.h>
+#ifndef __HASHTABLE_H__
+#define __HASHTABLE_H__
 
 #define MIN_N 100
 #define MAX_N 1000
@@ -32,4 +29,4 @@ int hash_delete (HashTable *hp, int k);
 int hash_get (HashTable *hp, int k, int *vptr);
 int hash_destroy (HashTable *hp);
 
-#endif // __HASHTABLE_H_INCLUDED__
+#endif // __HASHTABLE_H__

@@ -4,30 +4,24 @@
 #include <pthread.h>
 #include <signal.h>
 
-#include "include/shm-semaphore-config.h"
+#include "include/server-utils.h"
+#include "include/shm-common.h"
 
 
 // globals start here
-
 HashTable *ht;
-server_shm_data_t s_shm_data;
+//TODO rm server_shm_data_t s_shm_data;
 pthread_t* tid_ptr;
 
 // shm
 int fd_shm;
 struct shared_memory* shared_mem_ptr;
-bool _server_shm_init = false;
 
 // semaphores
 sem_t *mutex_sem, *producer_count_sem, *consumer_count_sem, *server_thread_mutex;
 sem_t *ht_prod_sem, *ht_cons_sem;
 bool _server_semphore_init = false;
 
-
-bool is_server_shm_ready()
-{
-    return _server_shm_init;
-}
 
 HashTable* get_HT_instance()
 {
@@ -58,7 +52,7 @@ bool init_sems()
     sem_unlink(SEM_HT_QUERY_PROD);
     sem_unlink(SEM_HT_QUERY_CONS);
     
-    //  mutual exclusion semaphore, mutex_sem with an initial value 0.
+    //  mutex for shared mem, mutex_sem with an initial value 0.
     if ((mutex_sem = sem_open (SEM_MUTEX_NAME, O_CREAT, 0660, 0)) == SEM_FAILED)
         print_err("sem_open: mutex_sem");
 
@@ -104,11 +98,6 @@ bool open_and_map_shm()
         print_err ("mmap");
 
     shared_mem_ptr->producer_index = shared_mem_ptr->consumer_index = 0;
-
-    s_shm_data.fd_shm = fd_shm;
-    s_shm_data.shared_mem_ptr = shared_mem_ptr;
-
-    _server_shm_init = true;
 
     return true;
 }
@@ -180,19 +169,6 @@ void* consumer_task_runner(void* args)
         
         int cons_index = shared_mem_ptr->consumer_index;
 
-        // TODO dbg only, rm in prod
-        // char query[256];
-        // int qindex = shared_mem_ptr->hts[cons_index].ht_query;
-        // if (qindex == 0)
-        //     sprintf(query, "INSERT");
-        // else if (qindex == 1)
-        //     sprintf(query, "READ");
-        // else if (qindex == 2)
-        //     sprintf(query, "DELETE");
-        // else {
-        //     print_err("Unknown query type\n");
-        //     exit(EXIT_FAILURE);
-        // }
         printf("[SERVER-%d] query at index %d.\n", (int)gettid(), cons_index); 
         
         // query execution as HT is a concurrent DS

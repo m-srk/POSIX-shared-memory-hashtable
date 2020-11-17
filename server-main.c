@@ -1,10 +1,12 @@
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
+#include <stdbool.h>
 #include <pthread.h>
 #include <sys/types.h>
 #include <signal.h>
 
-#include "include/shm-semaphore-config.h"
+#include "include/server-utils.h"
 
 #define IPC_FAILURE 1
 #define STRINGS_EQUAL 0

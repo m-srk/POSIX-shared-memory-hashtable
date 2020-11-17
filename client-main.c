@@ -2,7 +2,7 @@
 #include <string.h>
 #include <pthread.h>
 
-#include "include/shm-semaphore-config.h"
+#include "include/client-utils.h"
 
 
 int main (int argc, char* argv[])
